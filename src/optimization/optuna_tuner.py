@@ -117,15 +117,18 @@ class OptunaTrainer:
         """
         # 빠른 검증을 위한 설정 조정
         quick_config = copy.deepcopy(config)
-        quick_config['train']['epochs'] = 3  # 짧은 epoch
-        quick_config['data']['folds'] = 3    # 3-fold만 사용
+        # quick_config['train']['epochs'] = 3  # 짧은 epoch
+        # quick_config['data']['folds'] = 3    # 3-fold만 사용
         
         # CSV 데이터 로드
         import pandas as pd
         train_df = pd.read_csv(config['data']['train_csv'])
         
+        # folds 설정 (optuna_config.yaml에서 지정 가능, 기본값 5)
+        folds = config['data'].get('folds', 5)
+        
         # Stratified K-Fold 설정
-        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+        skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
         fold_scores = []
         
         for fold_idx, (train_idx, val_idx) in enumerate(skf.split(train_df, train_df[config['data']['target_col']])):
@@ -213,25 +216,47 @@ class OptunaTrainer:
             self.logger.write(f"⏱️ 최적화 완료: {elapsed_time:.1f}초 소요")
             print_optimization_summary(self.study)
             
-            # 최적 파라미터 저장
-            best_params_path = f"experiments/optimization/best_params_{time.strftime('%Y%m%d_%H%M')}.yaml"
-            os.makedirs(os.path.dirname(best_params_path), exist_ok=True)
+            # 올바른 폴더 구조로 저장 경로 생성
+            timestamp = time.strftime('%Y%m%d_%H%M')
+            date_str = time.strftime('%Y%m%d')
+            run_name = self.base_config.get("project", {}).get("run_name", "optimization")
             
+            # experiments/optimization/날짜/run_name/ 구조
+            viz_output_dir = f"experiments/optimization/{date_str}/{timestamp}_{run_name}"
+            os.makedirs(viz_output_dir, exist_ok=True)
+            
+            # lastest-optimization 폴더에 직접 저장 (기존 내용 삭제 후)
+            lastest_viz_output_dir = f"experiments/optimization/lastest-optimization"
+            
+            # 기존 lastest-optimization 폴더 삭제 (완전 교체)
+            if os.path.exists(lastest_viz_output_dir):
+                import shutil
+                shutil.rmtree(lastest_viz_output_dir)
+                self.logger.write(f"[CLEANUP] Removed existing lastest-optimization folder")
+            
+            os.makedirs(lastest_viz_output_dir, exist_ok=True)
+            
+            # 최적 파라미터 저장
+            best_params_path = os.path.join(viz_output_dir, f"best_params_{timestamp}.yaml")
+            lastest_best_params_path = os.path.join(lastest_viz_output_dir, f"best_params_{timestamp}.yaml")
             best_config = update_config_with_best_params(self.base_config, self.study.best_params)
-            dump_yaml(best_config, best_params_path)
+            dump_yaml(best_config, best_params_path)                    # 날짜 폴더에 저장
+            dump_yaml(best_config, lastest_best_params_path)             # lastest 폴더에 직접 저장
             
             self.logger.write(f"💾 최적 설정 저장: {best_params_path}")
+            self.logger.write(f"🔗 Latest 폴더에 직접 저장: {lastest_best_params_path}")
             
             #-------------- 최적화 결과 시각화 ---------------------- #
             try:
-                # 시각화를 위한 출력 디렉터리 설정
-                viz_output_dir = os.path.dirname(best_params_path)
                 model_name = self.base_config.get("model", {}).get("name", "unknown")
                 
                 # Study 객체 저장 (시각화용)
                 import pickle
-                study_path = os.path.join(viz_output_dir, f"study_{time.strftime('%Y%m%d_%H%M')}.pkl")
+                study_path = os.path.join(viz_output_dir, f"study_{timestamp}.pkl")
+                lastest_study_path = os.path.join(lastest_viz_output_dir, f"study_{timestamp}.pkl")
                 with open(study_path, 'wb') as f:
+                    pickle.dump(self.study, f)
+                with open(lastest_study_path, 'wb') as f:
                     pickle.dump(self.study, f)
                 
                 # 시각화 생성
@@ -240,7 +265,15 @@ class OptunaTrainer:
                     model_name=model_name,
                     output_dir=viz_output_dir
                 )
+                
+                # lastest 폴더에도 시각화 생성
+                visualize_optimization_pipeline(
+                    study_path=lastest_study_path,
+                    model_name=model_name,
+                    output_dir=lastest_viz_output_dir
+                )
                 self.logger.write(f"[VIZ] Optimization visualizations created in {viz_output_dir}")
+                self.logger.write(f"[VIZ] Latest optimization results: {lastest_viz_output_dir}")
                 
             except Exception as viz_error:
                 self.logger.write(f"[WARNING] Visualization failed: {str(viz_error)}")
@@ -254,7 +287,7 @@ class OptunaTrainer:
 
 def run_hyperparameter_optimization(
     config_path: str,
-    n_trials: int = 20,
+    n_trials: int = 10,
     timeout: int = 3600,
     output_path: Optional[str] = None
 ) -> str:

@@ -12,9 +12,40 @@ from pathlib import Path                             # 경로 처리 라이브�
 # ------------------------- 프로젝트 모듈 Import ------------------------- #
 from src.training.train_highperf import run_highperf_training   # 고성능 학습 실행 함수
 from src.inference.infer_highperf import run_highperf_inference # 고성능 추론 실행 함수
-from src.utils import load_yaml, create_log_path               # 핵심 유틸리티 함수
+from src.utils.core.common import load_yaml, create_log_path               # 핵심 유틸리티 함수
 from src.logging.logger import Logger                 # 로그 기록 클래스
 
+
+def get_model_name(cfg, fold=None):
+    """
+    단일 모델/다중 모델 앙상블 config에서 fold별 모델명을 자동으로 반환
+    - 단일 모델: cfg['model']['name']
+    - 다중 모델: cfg['models'][f'fold_{fold}']['name']
+    fold 인자가 없으면 단일 모델로 간주
+    """
+    # 다중 모델 앙상블 여부 판단
+    if "models" in cfg and isinstance(cfg["models"], dict):
+        if fold is not None:
+            fold_key = f"fold_{fold}"
+            if fold_key in cfg["models"] and isinstance(cfg["models"][fold_key], dict) and "name" in cfg["models"][fold_key]:
+                return cfg["models"][fold_key]["name"]
+        # 다중 모델이지만 fold가 없는 경우, 첫 번째 모델 반환
+        first_fold = min(int(k.split('_')[1]) for k in cfg["models"].keys() if k.startswith('fold_'))
+        fold_key = f"fold_{first_fold}"
+        if fold_key in cfg["models"] and isinstance(cfg["models"][fold_key], dict) and "name" in cfg["models"][fold_key]:
+            return cfg["models"][fold_key]["name"]
+    # 단일 모델
+    elif "model" in cfg and isinstance(cfg["model"], dict) and "name" in cfg["model"]:
+        return cfg["model"]["name"]
+    
+    # 에러 메시지 개선
+    available_keys = []
+    if "models" in cfg:
+        available_keys.extend([f"models.{k}" for k in cfg["models"].keys()])
+    if "model" in cfg:
+        available_keys.extend([f"model.{k}" for k in cfg["model"].keys()])
+    
+    raise KeyError(f"모델 이름을 찾을 수 없습니다. 사용 가능한 키: {available_keys}")
 
 # ---------------------- 전체 파이프라인 실행 함수 ---------------------- #
 # 전체 파이프라인 함수 정의
@@ -30,7 +61,10 @@ def run_full_pipeline(config_path: str, skip_training: bool = False, output_dir:
     
     # 설정 로드
     cfg = load_yaml(config_path)    # YAML 설정 파일 로드
-    
+
+    model_name = get_model_name(cfg, fold=0)  # 모델 이름 확인 (예외 발생 시 조기 종료)
+
+
     # 로거 설정
     timestamp = time.strftime("%Y%m%d_%H%M")                    # 타임스탬프 생성
     log_path = create_log_path("pipeline", f"full_pipeline_{timestamp}.log")  # 날짜별 로그 파일 경로 설정
@@ -65,8 +99,9 @@ def run_full_pipeline(config_path: str, skip_training: bool = False, output_dir:
         
         # fold_results.yaml 파일 찾기
         day = time.strftime(cfg["project"]["date_format"])                              # 날짜 포맷 생성
-        exp_base = Path(cfg["output"]["exp_dir"]) / day / cfg["project"]["run_name"]    # 실험 기본 경로
-        
+        folder_name = f"{day}_{time.strftime(cfg['project']['time_format'])}_{cfg['project']['run_name']}"  # 폴더명 생성
+        exp_base = Path(cfg["output"]["exp_dir"]) / day / folder_name                   # 실험 기본 경로
+
         fold_results_path = None    # 폴드 결과 파일 경로 초기화
         
         # 실험 기본 경로가 존재하는 경우
@@ -128,7 +163,7 @@ def run_full_pipeline(config_path: str, skip_training: bool = False, output_dir:
         logger.write("="*60)                                        # 구분선 로그
         
         logger.write(f"📊 Final submission file: {final_output}")   # 최종 제출 파일 로그
-        logger.write(f"📈 Model config: {cfg['model']['name']}")    # 모델 설정 로그
+        logger.write(f"📈 Model config: {model_name}")              # 모델 설정 로그  
         logger.write(f"🎯 Target F1 score: ~0.934")                 # 목표 F1 점수 로그
         logger.write(f"💾 Experiment results: {exp_base}")          # 실험 결과 경로 로그
         
