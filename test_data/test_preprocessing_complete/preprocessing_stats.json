@@ -1,0 +1,26 @@
+{
+  "dataset_info": {
+    "total_images": 3140,
+    "successful": 3140,
+    "skipped": 0,
+    "processing_date": "2025-09-09 09:23:02"
+  },
+  "rotation_stats": {
+    "rotation_applied": 1327,
+    "rotation_percentage": 42.261146496815286,
+    "avg_rotation_angle": 7.107765055457362
+  },
+  "noise_stats": {
+    "high_noise_processed": 437,
+    "high_noise_percentage": 13.9171974522293
+  },
+  "performance": {
+    "processing_time_minutes": 13.499373078346252,
+    "avg_time_per_image": 0.25794980404483286,
+    "images_per_minute": 232.60339437812377
+  },
+  "settings": {
+    "rotation_enabled": true,
+    "heavy_noise_correction_enabled": true
+  }
+}
