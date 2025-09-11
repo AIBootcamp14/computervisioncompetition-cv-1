@@ -23,7 +23,7 @@ data:
 
 # ------------------------------- 모델 설정  -------------------------------- #
 model:
-  name: "convnext_base_384_highperf"                  # 모델 아키텍처 이름
+  name: "convnext_base_384"                           # 모델 아키텍처 이름
   pretrained: False                                   # 사전학습 가중치 사용 여부 (False → 학습된 가중치 사용)
   drop_rate: 0.05                                     # dropout 비율 (학습시와 동일)
   drop_path_rate: 0.1                                 # stochastic depth 비율 (학습시와 동일)
@@ -32,7 +32,7 @@ model:
 # ------------------------- 추론 시 필요한 학습 설정 (고성능) ------------------------- #
 train:
   img_size: 384                                       # 학습 때 쓴 값과 동일해야 함 (메모리 최적화)
-  batch_size: 32                                      # 추론용 배치 크기 (메모리 최적화)
+  batch_size: 64                                      # 추론용 배치 크기 (메모리 최적화)
 
 # ------------------------------ 고성능 추론/제출 설정 ---------------------------- #
 inference:
@@ -53,7 +53,7 @@ output:
 wandb:
   project_name: document-classification-inference     # WandB 프로젝트명 (고성능 추론용)
   entity: null                                        # WandB 엔티티 (팀/사용자)
-  experiment_name: convnext_base_384_higherf_inference# 실험명
+  experiment_name: convnext_base_384_higherf_inference # 실험명
   tags:                                               # 실험 태그
   - convnext_base_384                                 # ConvNeXt Base 384 태그
   - ensemble                                          # 앙상블 태그
